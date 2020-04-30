@@ -171,9 +171,9 @@ Make sure you have the following file structure. Any extra files should include 
     telegraf/
       telegraf.conf
   targets.mk
-  docker-compose.yaml
+  docker-compose.yml
 Makefile
-docker-compose.yaml
+docker-compose.yml
 ```
 
 ### What is my `image`?
