@@ -1,6 +1,4 @@
-# Gryllidae 
-
-🦗
+# Gryllidae 🦗
 
 An (opininated) collection of open-source [CNCF](https://cncf.io)-based Docker services that assist in making [12factor](https://12factor.net) applications.
 
