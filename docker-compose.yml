@@ -5,7 +5,7 @@
 ##   - service discovery + dns + health-checks (consul) (localhost:8500/ui) (depends on registrator)
 ##   - time-series DB storage (influxdb) (localhost:8086)
 ##   - metric & event visualization (grafana) (localhost:3000)
-##   - distributed tracing (jaegar) (localhost:16686)
+##   - distributed tracing (jaeger) (localhost:16686)
 ## http routing provided by traefik on `localhost/<route>` (see SERVICE_TAGS vars for routes)
 
 version: '3'
@@ -69,10 +69,10 @@ services:
   #monitoring
   loki:
     image: "${REGISTRY}grafana/loki:latest"
-    depends_on: ['registrator', 'consul', 'grafana', 'telegraf']
+    depends_on: ['registrator', 'consul', 'telegraf']
     ports: ["3100:3100"]
     command: ["-config.file=/etc/loki/local-config.yaml"]
-    networks: ['infra']
+    networks: ['infra', 'monitor']
     labels:
       - logspout.exclude
   promtail:
@@ -80,7 +80,7 @@ services:
     volumes:
       - /var/log:/var/log:ro
     command: ["-config.file=/etc/promtail/docker-config.yaml"]
-    networks: ['infra']
+    networks: ['infra', 'monitor']
     labels:
       - logspout.exclude
 
@@ -98,7 +98,6 @@ services:
 
   influxdb:
     image: "${REGISTRY}influxdb:1.8-alpine"
-    restart: always
     ports: ['8086:8086']
     networks: ['monitor']
     labels:
@@ -113,12 +112,14 @@ services:
 
   grafana:
     image: "${REGISTRY}grafana/grafana:6.7.3"
-    depends_on: ['influxdb']
+    depends_on: ['influxdb', 'loki', 'jaeger']
     ports: ["3000:3000"]
     networks: ['monitor', 'instrument_web']
     user: "0"
     labels:
       - logspout.exclude
+    volumes:
+      - ./conf/grafana/provisioning:/etc/grafana/provisioning:ro
     environment:
       GF_SECURITY_ADMIN_PASSWORD: 'instrument'
       GF_USERS_ALLOW_SIGN_UP: 'false'
