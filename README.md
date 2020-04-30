@@ -97,7 +97,7 @@ include .instrument/targets.mk
 > _Alright, alright, alright!_
 
 Having the infrastructure in place is great, **but** it doesn't help, you, _the application developer_, ensure your app will run on these services.
-In order to test your _own app_ in this environment, [make your own `docker-compose.yaml` file](https://docs.docker.com/compose/compose-file/)
+In order to test your _own app_ in this environment, [make your own `docker-compose.yml` file](https://docs.docker.com/compose/compose-file/)
 
 Here's a starting template
 
