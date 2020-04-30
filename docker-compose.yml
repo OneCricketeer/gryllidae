@@ -10,19 +10,24 @@
 
 version: '3'
 
-services:
-  # logging
-  logspout:
-    image: "${REGISTRY}gliderlabs/logspout:master"
-    volumes: ['/var/run/docker.sock:/tmp/docker.sock:ro']
-    networks: ['infra','instrument_web']
-    ports: ['8000:80']  # logs avail at http://localhost:8000/logs
-    environment:
-      EXCLUDE_LABEL: logspout.exclude
-      # registrator
-      SERVICE_TAGS: 'traefik.enable=true,traefik.port=8000,traefik.docker.network=instrument_web,traefik.http.routers.router0.rule=PathPrefix(`/logs`)'
+# Create a network for intrastructure components
+networks:
+  infra:
+  monitor:
+  tracing:
+  instrument_web:
+    external: true
 
-  # service discovery (consul + registrator)
+# Create local persistent volumes
+# volumes:
+  # grafana-volume:
+  # influxdb-volume:
+
+services:
+
+###############################################################################
+#                         SERVICE DISCOVERY                                   #
+###############################################################################
   consul:
     image: "${REGISTRY}consul:1.7"
     restart: always
@@ -46,7 +51,9 @@ services:
     volumes: ['/var/run/docker.sock:/tmp/docker.sock:ro']
     command: ["-internal=true", "consul://consul:8500"]
 
-  # load balancing
+###############################################################################
+#                       LOAD BALANCE + PROXY                                  #
+###############################################################################
   traefik:
     image: "${REGISTRY}traefik:2.2"
     depends_on: ['registrator', 'consul']
@@ -66,15 +73,19 @@ services:
     labels:
       - logspout.exclude
 
-  #monitoring
-  loki:
-    image: "${REGISTRY}grafana/loki:latest"
-    depends_on: ['registrator', 'consul', 'telegraf']
-    ports: ["3100:3100"]
-    command: ["-config.file=/etc/loki/local-config.yaml"]
-    networks: ['infra', 'monitor']
-    labels:
-      - logspout.exclude
+###############################################################################
+#                            LOGGING                                          #
+###############################################################################
+  logspout:
+    image: "${REGISTRY}gliderlabs/logspout:master"
+    volumes: ['/var/run/docker.sock:/tmp/docker.sock:ro']
+    networks: ['infra','instrument_web']
+    ports: ['8000:80']  # logs avail at http://localhost:8000/logs
+    environment:
+      EXCLUDE_LABEL: logspout.exclude
+      # registrator
+      SERVICE_TAGS: 'traefik.enable=true,traefik.port=8000,traefik.docker.network=instrument_web,traefik.http.routers.router0.rule=PathPrefix(`/logs`)'
+
   promtail:
     image:  "${REGISTRY}grafana/promtail:latest"
     volumes:
@@ -84,6 +95,18 @@ services:
     labels:
       - logspout.exclude
 
+  loki:
+    image: "${REGISTRY}grafana/loki:latest"
+    depends_on: ['registrator', 'consul', 'telegraf']
+    ports: ["3100:3100"]
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    networks: ['infra', 'monitor']
+    labels:
+      - logspout.exclude
+
+###############################################################################
+#                         METRIC COLLECTION                                   #
+###############################################################################
   telegraf:
     image: "${REGISTRY}telegraf:1.14-alpine"
     restart: unless-stopped
@@ -110,6 +133,9 @@ services:
     # volumes:
     #   - influxdb-volume:/var/lib/influxdb
 
+###############################################################################
+#                            VISUALIZATION                                    #
+###############################################################################
   grafana:
     image: "${REGISTRY}grafana/grafana:6.7.3"
     depends_on: ['influxdb', 'loki', 'jaeger']
@@ -126,7 +152,9 @@ services:
       # registrator
       SERVICE_TAGS: 'traefik.enable=true,traefik.docker.network=instrument_web,traefik.http.routers.router0.rule=PathPrefix(`/grafana`)'
 
-  # tracing
+###############################################################################
+#                         DISTRIBUTED TRACING                                 #
+###############################################################################
   jaeger:
     image: "${REGISTRY}jaegertracing/all-in-one:1.17"
     networks: ['monitor','tracing', 'instrument_web']
@@ -145,16 +173,3 @@ services:
       # - '6832:6832/udp' # jaeger.thrift (binary)
       # - '14268:14268' # http accept jaeger.thrift directly
       # - '14250:14250' # http accept model.proto
-
-# Create a network for intrastructure components
-networks:
-  infra:
-  monitor:
-  tracing:
-  instrument_web:
-    external: true
-
-# Create local persistent volumes
-# volumes:
-  # grafana-volume:
-  # influxdb-volume:
