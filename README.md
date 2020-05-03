@@ -1,5 +1,10 @@
 # Gryllidae 🦗
 
+<sub>Pronunciation: (_grill-a-dee_)<sub>. 
+	
+> Most male crickets make a loud chirping sound by stridulation (scraping two specially textured limbs together)
+
+
 An (opininated) collection of open-source [CNCF](https://cncf.io)-based Docker services that assist in making [12factor](https://12factor.net) applications.
 
 **Future work** - Contribute to [awesome-compose](https://github.com/docker/awesome-compose).
@@ -66,7 +71,28 @@ Any passwords for services are `instrument`. For example, Grafana creds are `adm
 
 ## Getting Started
 
-First, download this repo as a ZIP (use the clone button) and extract it as a folder into your project as `.instrument`.
+### Prerequisites
+
+1. [Docker](https://docs.docker.com/get-docker/) 
+  1. [Docker Compose[(https://docs.docker.com/compose/install/))
+  2. **Admin-level user permissions** (a Docker requirement). 
+2. `make` (installed by default on almost all Unix systems). If using Windows, [get WSL2](https://docs.microsoft.com/en-us/windows/wsl/wsl2-install). 
+3. (optional) `git`. This way, you can ~subscribe to notifications~ easily pull the latest changes. 
+
+> There are 10 types of people in the world, those who understand binary and those who don't.
+
+With those few things in place, it's actual quiet simple. Either... 
+
+- **(1)** You know a thing or two about `git`. 
+- **(0)** You don't. In which case, [study up 📚](https://git-scm.com/doc)
+
+download this repo as a ZIP (use the clone button) and extract it as a folder into your project as `.instrument`.
+
+|Your binary state of mind|Action|
+|-|-|
+|**1**|`cd /some/path/to/project` <br> `git submodule add git@github.com:OneCricketeer/gryllidae.git .instrument`|
+|Huh? (**0**)|[Click here](https://github.com/OneCricketeer/gryllidae/archive/master.zip), and/or keep reading.<br>Extract that to a `.instrument` folder inside your project|
+
 
 Next, create a Docker network for the components
 
