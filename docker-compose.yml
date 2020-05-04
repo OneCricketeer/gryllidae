@@ -1,143 +1,14 @@
-## Ultimate Instrumentation 
+## Ultimate Instrumentation
 ## Provides
 ##   - log collection and forwarding (logspout) (localhost:8000/logs)
 ##   - http/tcp/udp proxying (traefik) (localhost:8080/dashboard/)
 ##   - service discovery + dns + health-checks (consul) (localhost:8500/ui) (depends on registrator)
 ##   - time-series DB storage (influxdb) (localhost:8086)
-##   - metric & event visualization (grafana) (localhost:3000) 
-##   - distributed tracing (jaegar) (localhost:16686)
+##   - metric & event visualization (grafana) (localhost:3000)
+##   - distributed tracing (jaeger) (localhost:16686)
 ## http routing provided by traefik on `localhost/<route>` (see SERVICE_TAGS vars for routes)
 
 version: '3'
-
-services:
-  # logging
-  logspout:
-    image: "${REGISTRY}gliderlabs/logspout:master"
-    volumes: ['/var/run/docker.sock:/tmp/docker.sock:ro']
-    networks: ['infra','instrument_web']
-    ports: ['8000:80']  # logs avail at http://localhost:8000/logs
-    environment:
-      EXCLUDE_LABEL: logspout.exclude
-      # registrator
-      SERVICE_TAGS: 'traefik.enable=true,traefik.port=8000,traefik.docker.network=instrument_web,traefik.http.routers.router0.rule=PathPrefix(`/logs`)'
-
-  # service discovery (consul + registrator)
-  consul:
-    image: "${REGISTRY}consul:1.7"
-    restart: always
-    networks: ['infra','instrument_web']
-    ports:
-      - '8500:8500' # web ui
-      # - '8300:8300' # server rpc
-      # - '8301:8301' # lan serf tcp
-      # - '8301:8301/udp' # lan serf udp
-      # - '8600:8600' # dns tcp
-      # - '8600:8600/udp' # dns udp
-    environment: 
-      # registrator
-      SERVICE_TAGS: "traefik.enable=true,traefik.docker.network=instrument_web"
-    labels:
-      - logspout.exclude 
-  registrator:
-    image: "${REGISTRY}gliderlabs/registrator:master"
-    depends_on: ['consul']
-    networks: ['infra']
-    volumes: ['/var/run/docker.sock:/tmp/docker.sock:ro']
-    command: ["-internal=true", "consul://consul:8500"]
-
-  # load balancing 
-  traefik:
-    image: "${REGISTRY}traefik:2.2"
-    depends_on: ['registrator', 'consul']
-    networks: ['infra','instrument_web']
-    ports: 
-      - '8080:8080' # web ui
-      - '80:80'
-    command: 
-      # - "--log.level=DEBUG"
-      - "--api.insecure=true"
-      - "--api.dashboard=true"
-      - "--providers.consulcatalog=true"
-      - "--providers.consulcatalog.endpoint.address=http://consul:8500"
-      - "--providers.consulcatalog.endpoint.datacenter=dc1"
-      - "--providers.consulcatalog.cache=true"
-      - "--providers.consulcatalog.exposedByDefault=false"
-    labels:
-      - logspout.exclude 
-
-  #monitoring
-  ## TODO - get loki working (in grafana)
-  # loki:
-  #   image: ${REGISTRY}/grafana/loki:latest
-  #   depends_on: ['registrator', 'consul']
-  #   ports: ["3100:3100"]
-  #   command: ["-config.file=/etc/loki/local-config.yaml"]
-  #   networks: ['infra']
-  #   environment:
-  #     # LOGSPOUT: ignore
-  #     SERVICE_TAGS: "traefik.enable=true,traefik.http.routers.router0.rule=PathPrefix(`/loki`)"
-
-  telegraf:
-    image: "${REGISTRY}telegraf:1.14-alpine"
-    restart: unless-stopped
-    networks: ['infra', 'monitor']
-    depends_on: ['influxdb']
-    labels:
-      - logspout.exclude 
-    volumes:
-      - ./conf/telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
-      # For docker stats
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-
-  influxdb:
-    image: "${REGISTRY}influxdb:1.8-alpine"
-    restart: always
-    ports: ['8086:8086']
-    networks: ['monitor']
-    labels:
-      - logspout.exclude 
-    environment: 
-      INFLUXDB_DB: telegraf 
-      INFLUXDB_USER: telegraf
-      INFLUXDB_USER_PASSWORD: 'instrument'
-      INFLUXDB_REPORTING_DISABLED: 'true'
-    # volumes:
-    #   - influxdb-volume:/var/lib/influxdb
-
-  grafana:
-    image: "${REGISTRY}grafana/grafana:6.7.3"
-    depends_on: ['influxdb']
-    ports: ["3000:3000"]
-    networks: ['monitor', 'instrument_web']
-    user: "0"
-    labels:
-      - logspout.exclude 
-    environment:
-      GF_SECURITY_ADMIN_PASSWORD: 'instrument'
-      GF_USERS_ALLOW_SIGN_UP: 'false'
-      # registrator
-      SERVICE_TAGS: 'traefik.enable=true,traefik.docker.network=instrument_web,traefik.http.routers.router0.rule=PathPrefix(`/grafana`)'
-
-  # tracing
-  jaeger:
-    image: "${REGISTRY}jaegertracing/all-in-one:1.17"
-    networks: ['monitor','tracing', 'instrument_web']
-    environment:
-      COLLECTOR_ZIPKIN_HTTP_PORT: 9411
-    labels:
-      - logspout.exclude 
-    environment: 
-      # registrator
-      SERVICE_TAGS: 'traefik.enable=true,traefik.docker.network=instrument_web,traefik.http.routers.router0.rule=PathPrefix(`/jaeger`)'
-    ports:
-      - '9411:9411'  # zipkin
-      - '16686:16686' # web ui  
-      # - '5778:5778' # http serve configs
-      - '6831:6831/udp' # jaeger.thrift (compact)
-      # - '6832:6832/udp' # jaeger.thrift (binary)
-      # - '14268:14268' # http accept jaeger.thrift directly
-      # - '14250:14250' # http accept model.proto
 
 # Create a network for intrastructure components
 networks:
@@ -151,3 +22,154 @@ networks:
 # volumes:
   # grafana-volume:
   # influxdb-volume:
+
+services:
+
+###############################################################################
+#                         SERVICE DISCOVERY                                   #
+###############################################################################
+  consul:
+    image: "${REGISTRY}consul:1.7"
+    restart: always
+    networks: ['infra','instrument_web']
+    ports:
+      - '8500:8500' # web ui
+      # - '8300:8300' # server rpc
+      # - '8301:8301' # lan serf tcp
+      # - '8301:8301/udp' # lan serf udp
+      # - '8600:8600' # dns tcp
+      # - '8600:8600/udp' # dns udp
+    environment:
+      # registrator
+      SERVICE_TAGS: "traefik.enable=true,traefik.docker.network=instrument_web"
+    labels:
+      - logspout.exclude
+  registrator:
+    image: "${REGISTRY}gliderlabs/registrator:master"
+    depends_on: ['consul']
+    networks: ['infra']
+    volumes: ['/var/run/docker.sock:/tmp/docker.sock:ro']
+    command: ["-internal=true", "consul://consul:8500"]
+
+###############################################################################
+#                       LOAD BALANCE + PROXY                                  #
+###############################################################################
+  traefik:
+    image: "${REGISTRY}traefik:2.2"
+    depends_on: ['registrator', 'consul']
+    networks: ['infra','instrument_web']
+    ports:
+      - '8080:8080' # web ui
+      - '80:80'
+    command:
+      # - "--log.level=DEBUG"
+      - "--api.insecure=true"
+      - "--api.dashboard=true"
+      - "--providers.consulcatalog=true"
+      - "--providers.consulcatalog.endpoint.address=http://consul:8500"
+      - "--providers.consulcatalog.endpoint.datacenter=dc1"
+      - "--providers.consulcatalog.cache=true"
+      - "--providers.consulcatalog.exposedByDefault=false"
+    labels:
+      - logspout.exclude
+
+###############################################################################
+#                            LOGGING                                          #
+###############################################################################
+  logspout:
+    image: "${REGISTRY}gliderlabs/logspout:master"
+    volumes: ['/var/run/docker.sock:/tmp/docker.sock:ro']
+    networks: ['infra','instrument_web']
+    ports: ['8000:80']  # logs avail at http://localhost:8000/logs
+    environment:
+      EXCLUDE_LABEL: logspout.exclude
+      # registrator
+      SERVICE_TAGS: 'traefik.enable=true,traefik.port=8000,traefik.docker.network=instrument_web,traefik.http.routers.router0.rule=PathPrefix(`/logs`)'
+
+  promtail:
+    image:  "${REGISTRY}grafana/promtail:latest"
+    volumes:
+      - /var/log:/var/log:ro
+    command: ["-config.file=/etc/promtail/docker-config.yaml"]
+    networks: ['infra', 'monitor']
+    labels:
+      - logspout.exclude
+
+  loki:
+    image: "${REGISTRY}grafana/loki:latest"
+    depends_on: ['registrator', 'consul', 'telegraf']
+    ports: ["3100:3100"]
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    networks: ['infra', 'monitor']
+    labels:
+      - logspout.exclude
+
+###############################################################################
+#                         METRIC COLLECTION                                   #
+###############################################################################
+  telegraf:
+    image: "${REGISTRY}telegraf:1.14-alpine"
+    restart: unless-stopped
+    networks: ['infra', 'monitor']
+    depends_on: ['influxdb']
+    labels:
+      - logspout.exclude
+    volumes:
+      - ./conf/telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+      # For docker stats
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  influxdb:
+    image: "${REGISTRY}influxdb:1.8-alpine"
+    ports: ['8086:8086']
+    networks: ['monitor']
+    labels:
+      - logspout.exclude
+    environment:
+      INFLUXDB_DB: telegraf
+      INFLUXDB_USER: telegraf
+      INFLUXDB_USER_PASSWORD: 'instrument'
+      INFLUXDB_REPORTING_DISABLED: 'true'
+    # volumes:
+    #   - influxdb-volume:/var/lib/influxdb
+
+###############################################################################
+#                            VISUALIZATION                                    #
+###############################################################################
+  grafana:
+    image: "${REGISTRY}grafana/grafana:6.7.3"
+    depends_on: ['influxdb', 'loki', 'jaeger']
+    ports: ["3000:3000"]
+    networks: ['monitor', 'instrument_web']
+    user: "0"
+    labels:
+      - logspout.exclude
+    volumes:
+      - ./conf/grafana/provisioning:/etc/grafana/provisioning:ro
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: 'instrument'
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+      # registrator
+      SERVICE_TAGS: 'traefik.enable=true,traefik.docker.network=instrument_web,traefik.http.routers.router0.rule=PathPrefix(`/grafana`)'
+
+###############################################################################
+#                         DISTRIBUTED TRACING                                 #
+###############################################################################
+  jaeger:
+    image: "${REGISTRY}jaegertracing/all-in-one:1.17"
+    networks: ['monitor','tracing', 'instrument_web']
+    environment:
+      COLLECTOR_ZIPKIN_HTTP_PORT: 9411
+    labels:
+      - logspout.exclude
+    environment:
+      # registrator
+      SERVICE_TAGS: 'traefik.enable=true,traefik.docker.network=instrument_web,traefik.http.routers.router0.rule=PathPrefix(`/jaeger`)'
+    ports:
+      - '9411:9411'  # zipkin
+      - '16686:16686' # web ui
+      # - '5778:5778' # http serve configs
+      - '6831:6831/udp' # jaeger.thrift (compact)
+      # - '6832:6832/udp' # jaeger.thrift (binary)
+      # - '14268:14268' # http accept jaeger.thrift directly
+      # - '14250:14250' # http accept model.proto
