@@ -243,7 +243,3 @@ Useful [commands](https://docs.docker.com/compose/reference/):
 ### I really like Minikube/Minishift and Helm
 
 They are nice, sure, but Kube YAML is needlessly verbose for a local environment.
-
-Too bad; Grow up.
-
-You can run your Docker Compose file [in a hosted Kubernetes enviornment](https://kelda.io), with little to no changes necessary.
